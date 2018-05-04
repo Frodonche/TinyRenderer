@@ -7,7 +7,7 @@ using namespace std;
 Triangle::Triangle(Point p, Point pBis, Point pSecond) {
 	ligne1 = Line(p.getX(), p.getY(), pBis.getX(), pBis.getY());
 	ligne2 = Line(pBis.getX(), pBis.getY(), pSecond.getX(), pSecond.getY());
-	ligne3 = Line(pSecond.getX(), pSecond.getY(), p.getX(), p.getY());
+	ligne3 = Line(p.getX(), p.getY(), pSecond.getX(), pSecond.getY());
 }
 
 Line Triangle::getLigne1() {

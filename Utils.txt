@@ -25,3 +25,21 @@ vector<int> vecOfInts;
 
 add un item à un vecteur :
 vectOfInts.push_back(ITEM);
+
+
+Split une string avec un delimiter
+
+std::string s = "scott>=tiger>=mushroom";
+std::string delimiter = ">=";
+
+size_t pos = 0;
+std::string token;
+while ((pos = s.find(delimiter)) != std::string::npos) {
+    token = s.substr(0, pos);
+    std::cout << token << std::endl;
+    s.erase(0, pos + delimiter.length());
+}
+std::cout << s << std::endl;
+
+
+1258 SOMMETS
