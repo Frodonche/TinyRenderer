@@ -59,6 +59,7 @@ TGAImage openfile(string filename, TGAImage image) {
 				token = str.substr(0, pos);
 				// si on est sur le x
 				if (cpt == 1) {
+					//cout << token.c_str();
 					xTemp = (atof(token.c_str()) + 1.) * LARGEUR / 2.;
 					//xTemp = ((atof(token.c_str)) + 1.) * LARGEUR / 2.;
 				}
@@ -66,6 +67,7 @@ TGAImage openfile(string filename, TGAImage image) {
 				// si on est sur le y
 				if (cpt == 2) {
 					yTemp = (atof(token.c_str()) + 1.) * LARGEUR / 2.;
+				//	cout << " " << token.c_str() << endl;
 				}
 				str.erase(0, pos + delimiter.length());
 				cpt += 1;
@@ -74,6 +76,9 @@ TGAImage openfile(string filename, TGAImage image) {
 			//cout << xTemp << " " << yTemp << endl;
 
 			Point p(xTemp, yTemp);
+
+			//cout << p.getX() << " " << p.getY() << endl;
+			//image = p.tracer(image, white);
 			lesPoints.push_back(p);
 
 		}
@@ -113,21 +118,11 @@ TGAImage openfile(string filename, TGAImage image) {
 			token2 = str.substr(0, pos2);
 			indice3 = stoi(str, &sz);
 
-			if (indice1 == 1258) {
-				indice1 = indice2;
-			}
-			if (indice2 == 1258) {
-				indice2 = indice3;
-			}
-			if (indice3 == 1258) {
-				indice3 = indice1;
-			}
+			//cout << indice1 << " " << indice2 << " " << indice3 << endl;
+			Triangle t(lesPoints.at(indice1-1), lesPoints.at(indice2-1),
+					lesPoints.at(indice3-1));
 
-			cout << indice1 << " " << indice2 << " " << indice3 << endl;
-			Triangle t(lesPoints.at(indice1), lesPoints.at(indice2),
-					lesPoints.at(indice3));
-
-			image = t.tracer(image, white);
+			//image = t.tracer(image, white);
 
 		}
 	}
@@ -138,7 +133,7 @@ TGAImage openfile(string filename, TGAImage image) {
 int main(int argc, char** argv) {
 	TGAImage image(LARGEUR, HAUTEUR, TGAImage::RGB);
 //	image.set(52, 41, red);
-	image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
+
 
 //	Line ligneTest(52, 41, 70, 35);
 //	image = ligneTest.tracer(image, red);
@@ -148,6 +143,7 @@ int main(int argc, char** argv) {
 
 	image = openfile("africian_head.obj", image);
 
+	image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
 	image.write_tga_file("output.tga");
 	return 0;
 }

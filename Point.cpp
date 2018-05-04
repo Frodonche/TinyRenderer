@@ -20,3 +20,8 @@ int Point::getX() {
 int Point::getY() {
 	return y;
 }
+
+TGAImage Point::tracer(TGAImage image, TGAColor color){
+	image.set(x, y, color);
+	return image;
+}
