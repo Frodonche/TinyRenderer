@@ -3,6 +3,12 @@
 #include <iostream>
 using namespace std;
 
+Triangle::Triangle(){
+	ligne1 = Line(0, 0, 0, 0);
+	ligne2 = Line(0, 0, 0, 0);
+	ligne3 = Line(0, 0, 0, 0);
+}
+
 // Le constructeur defini les lignes du triangle a partir des points qui lui sont passes en parametres
 Triangle::Triangle(Point p, Point pBis, Point pSecond) {
 	ligne1 = Line(p.getX(), p.getY(), pBis.getX(), pBis.getY());

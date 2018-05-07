@@ -6,12 +6,14 @@
 class Point{
 	int x;
 	int y;
+	int z;
 
 public:
   Point();
-  Point(int xParam,int yParam);
+  Point(int xParam,int yParam, int zParam);
   int getX();
   int getY();
+  int getZ();
   TGAImage tracer(TGAImage image, TGAColor color);
 };
 

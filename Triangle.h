@@ -12,6 +12,7 @@ class Triangle
 	Line ligne3;
 
 public:
+  Triangle();
   Triangle(Point p, Point pBis, Point pSecond);
   Line getLigne1();
   Line getLigne2();

@@ -17,7 +17,7 @@ public:
   int getY1();
   int getX2();
   int getY2();
-  TGAImage tracer(TGAImage image, TGAColor color);
+  TGAImage tracer(TGAImage &image, TGAColor color);
 };
 
 #endif // LINE_H
