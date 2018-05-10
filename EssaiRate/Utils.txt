@@ -1,0 +1,45 @@
+Un sommet est défini de la manière suivante:
+v 1.0 0.0 0.0 
+
+Une coordonnée de texture est définie de la manière suivante:
+vt 1.0 0.0
+
+Une normale est définie de la manière suivante:
+vn 0.0 1.0 0.0
+
+
+Chaque face est ensuite définie par un ensemble d'indices faisant référence aux coordonnées des points, de texture et des normales définies précédemment.
+Par exemple, la face suivante
+
+f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3
+
+définit un triangle constitué des sommets d'indices v1, v2 et v3 dans la liste des sommets v. Chacun de ces sommets possède une coordonnée de texture identifiée par son indice dans la liste des coordonnées de texture vt et une normale identifiée dans la liste des normales vn.
+
+
+
+Les lessons : https://github.com/ssloy/tinyrenderer/wiki/Lesson-1:-Bresenham%E2%80%99s-Line-Drawing-Algorithm
+
+
+Initialiser un vecteur :
+vector<int> vecOfInts;
+
+add un item à un vecteur :
+vectOfInts.push_back(ITEM);
+
+
+Split une string avec un delimiter
+
+std::string s = "scott>=tiger>=mushroom";
+std::string delimiter = ">=";
+
+size_t pos = 0;
+std::string token;
+while ((pos = s.find(delimiter)) != std::string::npos) {
+    token = s.substr(0, pos);
+    std::cout << token << std::endl;
+    s.erase(0, pos + delimiter.length());
+}
+std::cout << s << std::endl;
+
+
+1258 SOMMETS

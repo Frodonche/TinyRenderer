@@ -1,28 +1,126 @@
-#include "Triangle.h"
-#include "Line.h"
-#include "Point.h"
-#include "IndiceTriangle.h"
-
-#include "tgaimage.h"
-
 #include <fstream>
 #include <sstream>
 #include <iostream>
 #include <string>
 #include <regex>
+#include <vector>
+
+#include "tgaimage.h"
 
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
+const TGAColor green = TGAColor(0, 255, 0, 255);
 
 const float COTE = 500.0;
 
 using namespace std;
 
-// Ouvre le fichier et range la liste des points
-TGAImage openfile(string filename, TGAImage &image) {
-	const char * name = filename.c_str();
+typedef struct vector3is vector3i;
+struct vector3is {
+  int premier; // x si c'est un point
+  int deuxieme; // y si c'est un point
+  int troisieme; // z si c'est un point
+};
 
-	bool firstTime = true;
+typedef struct vector3fs vector3f;
+struct vector3fs {
+	float x;
+	float y;
+	float z;
+};
+
+
+void line(int x1, int y1, int x2, int y2, TGAImage &image, TGAColor color){
+	bool steep = false;
+		if (abs(x1 - x2) < abs(y1 - y2)) { // if the line is steep, we transpose the image
+			swap(x1, y1);
+			swap(x2, y2);
+			steep = true;
+		}
+		if (x1 > x2) { // make it left−to−right
+			swap(x1, x2);
+			swap(y1, y2);
+		}
+		for (int x = x1; x <= x2; x++) {
+			float t = (float) (x - x1) / (float) (x2 - x1);
+			int y = y1 * (1. - t) + y2 * t;
+			if (steep) {
+				image.set(y, x, color); // if transposed, de−transpose
+			} else {
+				image.set(x, y, color);
+			}
+		}
+}
+
+// Trace un triangle reliant les trois points d'indice indice1, 2 et 3
+void tracer_triangle(vector3i point1, vector3i point2, vector3i point3, TGAImage &image, TGAColor color){
+	line(point1.premier, point1.deuxieme, point2.premier, point2.deuxieme, image, color);
+	line(point2.premier, point2.deuxieme, point3.premier, point3.deuxieme, image, color);
+	line(point3.premier, point3.deuxieme, point1.premier, point1.deuxieme, image, color);
+}
+
+
+//Calcul du barycentre pour definir si le point pTest est dans le triangle defini par les points point1, 2 et 3
+vector3f barycentre(vector3i * triangle, vector3i P) {
+	vector3f result;
+	vector3f v1 = {(float)triangle[2].premier - (float)triangle[0].premier, (float)triangle[1].premier - (float)triangle[0].premier, (float)triangle[0].premier - (float)P.premier};
+	vector3f v2 = {(float)triangle[2].deuxieme - (float)triangle[0].deuxieme, (float)triangle[1].deuxieme - (float)triangle[0].deuxieme, (float)triangle[0].deuxieme - (float)P.deuxieme};
+
+	// cross product de v1 et v2
+	vector3f crossProduct = {(v1.y * v2.z) - (v1.z * v2.y), (v1.z * v2.x) - (v1.x * v2.z), (v1.x * v2.y) - (v1.y * v2.x)};
+
+	// si on est hors du triangle, on rend une valeur négative
+    if (abs(crossProduct.z)<1){
+    	result = {-1,-1,-1};
+    }else{
+    	result = {1.f - (crossProduct.x + crossProduct.y) / crossProduct.z, crossProduct.y / crossProduct.z, crossProduct.x / crossProduct.z};
+    }
+
+    return result;
+}
+
+// Remplit l'intérieur du triangle
+void remplir_triangle(vector3i point1, vector3i point2, vector3i point3, TGAImage &image, TGAColor color){
+	vector3i triangle[3] = {point1, point2, point3};
+
+	// On trie les points par ordre croissant des y (petit tri a bulles)
+	if(triangle[0].deuxieme > triangle[1].deuxieme)
+		swap(triangle[0], triangle[1]);
+	if(triangle[0].deuxieme > triangle[2].deuxieme)
+		swap(triangle[0], triangle[2]);
+	if(triangle[1].deuxieme > triangle[2].deuxieme)
+		swap(triangle[1], triangle[2]);
+
+	// On initialise les bords de la boite
+	 vector3i bordMax = {(int)COTE-1, (int)COTE-1, 0};
+	 vector3i bordMin = {0, 0, 0};
+
+	 vector3i constMax = {(int)COTE-1, (int)COTE-1, 0};
+	 vector3i constMin = {0, 0, 0};
+
+	for (int i=0; i<3; i++) {
+		bordMax.premier = max((int)constMin.premier, min((int)bordMax.premier, (int)triangle[i].premier));
+		bordMin.premier = min((int)constMax.premier, max((int)bordMin.premier, (int)triangle[i].premier));
+		bordMax.deuxieme = max((int)constMin.deuxieme, min((int)bordMax.deuxieme, (int)triangle[i].deuxieme));
+		bordMin.deuxieme = min((int)constMax.deuxieme, max((int)bordMin.deuxieme, (int)triangle[i].deuxieme));
+	}
+
+	vector3i P;
+	for (P.premier = bordMax.premier; P.premier <= bordMin.premier; P.premier++) {
+		for (P.deuxieme = bordMax.deuxieme; P.deuxieme <= bordMin.deuxieme; P.deuxieme++) {
+			vector3f bary  = barycentre(triangle, P);
+			if (bary.x < 0 || bary.y < 0 || bary.z < 0) continue; // On prevoie les cas ou les coordonnes sortiraient de l'ecran
+			image.set(P.premier, P.deuxieme, color);
+		}
+	}
+
+}
+
+// Ouvre le fichier et range la liste des points
+void openfile(string filename, TGAImage &image) {
+	vector<vector3i> lesPoints;
+
+	const char * name = filename.c_str();
 
 	ifstream in(name); // on essaye d'ouvrir le fichier
 
@@ -39,14 +137,14 @@ TGAImage openfile(string filename, TGAImage &image) {
 	string delimiter2 = "/";
 	bool matchV, matchF;
 
-	vector<Point> lesPoints;
-	vector<IndiceTriangle> lesIndices;
 	int cpt;
 	int xTemp, yTemp, zTemp;
 	int indice1, indice2, indice3;
 
 	string token, token2;
 	size_t pos, pos2;
+
+	vector3i tempPoint;
 
 	while (getline(in, str)) {
 		// A chaque ligne, on regarde de quel type il s'agit, et on les range dans les tableaux appropries
@@ -64,18 +162,18 @@ TGAImage openfile(string filename, TGAImage &image) {
 				// si on est sur le x
 				if (cpt == 1) {
 					//cout << token.c_str();
-					xTemp = (atof(token.c_str()) + 1.) * COTE / 2.;
+					xTemp = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
 				}
 
 				// si on est sur le y
 				if (cpt == 2) {
-					yTemp = (atof(token.c_str()) + 1.) * COTE / 2.;
+					yTemp = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
 					//	cout << " " << token.c_str() << endl;
 				}
 
 				// si on est sur le z
 				if (cpt == 3) {
-					zTemp = (atof(token.c_str()) + 1.) * COTE / 2.;
+					zTemp = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
 					//	cout << " " << token.c_str() << endl;
 				}
 				str.erase(0, pos + delimiter.length());
@@ -84,11 +182,12 @@ TGAImage openfile(string filename, TGAImage &image) {
 
 			//cout << xTemp << " " << yTemp << endl;
 
-			Point p(xTemp, yTemp, zTemp);
+			tempPoint.premier = xTemp;
+			tempPoint.deuxieme = yTemp;
+			tempPoint.troisieme = zTemp;
 
-			//cout << p.getX() << " " << p.getY() << endl;
-			image = p.tracer(image, white);
-			lesPoints.push_back(p);
+			lesPoints.push_back(tempPoint);
+			image.set(tempPoint.premier, tempPoint.deuxieme, white);
 
 		}
 
@@ -126,187 +225,22 @@ TGAImage openfile(string filename, TGAImage &image) {
 			token2 = str.substr(0, pos2);
 			indice3 = atoi(str.c_str()) - 1;
 
-			IndiceTriangle iT(indice1, indice2, indice3);
-			lesIndices.push_back(iT);
+			tracer_triangle(lesPoints.at(indice1), lesPoints.at(indice2), lesPoints.at(indice3), image, white);
 
-			Triangle t(lesPoints.at(indice1), lesPoints.at(indice2),
-					lesPoints.at(indice3));
-
-			image = t.tracer(image, white);
-			if (firstTime) {
-				//image = t.tracer(image, white);
-				firstTime = false;
-				cout << indice1 << " " << indice2 << " " << indice3 << endl;
-				cout << lesPoints.at(indice1).getX() << " "
-						<< lesPoints.at(indice1).getY() << " "
-						<< lesPoints.at(indice2).getX() << " "
-						<< lesPoints.at(indice2).getY() << " "
-						<< lesPoints.at(indice3).getX() << " "
-						<< lesPoints.at(indice2).getY() << endl;
-			}
 		}
 	}
 
-	return image;
-
 }
-
-// Fonction alternative (moins bien)
-/*TGAImage openfile(string filename, TGAImage &image) {
- vector<Point> lesPoints;
- vector<Triangle> lesTriangles;
-
- int cpt, cptDeux;
- int xTemp, yTemp, zTemp;
- int premier, deuxieme, troisieme;
- string paquetUn, paquetDeux, paquetTrois;
- char * pch;
- char * pchDeux;
-
- const char * name = filename.c_str();
- ifstream in(name); // on essaye d'ouvrir le fichier
-
- // si on ne peut pas ouvrir le fichier
- if (!in)
- cout << "Cannot open input file.\n";
-
- string str, strDeux;
- char * tabStr;
- char * tabStrDeux;
-
- bool trouve;
- string temp;
-
- regex pattern { "^/" };
-
- // Tant qu'on n'a pas atteint la fin du fichier
- while (!in.eof()) {
- getline(in, str);
-
- tabStr = new char[str.length() + 1];
- strcpy(tabStr, str.c_str());
-
- // Si on est sur une ligne v
- if (str[0] == 'v' && str[1] == ' ') {
-
- // On decoupe la ligne avec les espaces
- pch = strtok(tabStr, " ");
- cpt = 0;
- while (pch != NULL) {
- if (cpt == 1)
- xTemp = (atof(pch) + 1.) * COTE / 2.;
- if (cpt == 2)
- yTemp = (atof(pch) + 1.) * COTE / 2.;
- if (cpt == 3)
- zTemp = (atof(pch) + 1.) * COTE / 2.; // pas sûr de la transformation a faire dessus
-
- pch = strtok(NULL, " ");
- cpt++;
- }
-
- // Quand on arrive ici, on a termine de lire la ligne
- Point p(xTemp, yTemp, zTemp);
- lesPoints.push_back(p);
- }
-
- // si on est sur une ligne f
- if (str[0] == 'f') {
- pch = strtok(tabStr, " ");
- cpt = 0;
-
- // On decoupe la ligne avec les espaces
- while (pch != NULL) {
- char * taMere = new char[strlen(pch) + 1];
- if (cpt == 1) {
- paquetUn = pch;
- }
- if (cpt == 2) {
- paquetDeux = pch;
- }
- if (cpt == 3) {
- paquetTrois = pch;
- }
-
- pch = strtok(NULL, " ");
- cpt++;
- }
-
- cout << paquetUn << " " << paquetDeux << " " << paquetTrois << endl;
-
- for (int i = 0; i < 3; i++) { // pour s'occuper des trois paquets
- trouve = false;
- cpt = 0;
- temp = "";
- if (i == 0) {
- while (trouve == false && cpt < paquetUn.size()) {
- if (regex_search(&paquetUn[cpt], pattern)) {
- trouve = true;
- } else {
- temp += paquetUn[cpt];
- }
- cpt++;
- }
- premier = atoi(temp.c_str()) -1;
- }
- if (i == 1) {
- while (trouve == false && cpt < paquetDeux.size()) {
- if (regex_search(&paquetDeux[cpt], pattern)) {
- trouve = true;
- } else {
- temp += paquetDeux[cpt];
- }
- cpt++;
- }
- deuxieme = atoi(temp.c_str()) -1;
- }
- if (i == 2) {
- while (trouve == false && cpt < paquetTrois.size()) {
- if (regex_search(&paquetTrois[cpt], pattern)) {
- trouve = true;
- } else {
- temp += paquetTrois[cpt];
- }
- cpt++;
- }
- troisieme = atoi(temp.c_str()) -1;
- }
- }
-
- cout << premier << " " << deuxieme << " " << troisieme << endl;
-
- Triangle t(lesPoints[premier], lesPoints[deuxieme], lesPoints[troisieme]);
- lesTriangles.push_back(t);
- }
- }
-
- // Quand on arrive ici, on a termine de lire le fichier
- //	Point unPoint;
- //	for (int i = 0; i < lesPoints.size(); i++) {
- //		unPoint = lesPoints[i];
- //		image = unPoint.tracer(image, white);
- //		//	cout << unPoint.getX() << " " << unPoint.getY() << endl;
- //	}
-
- Triangle unTriangle;
- for (int i = 0; i < lesTriangles.size(); i++) {
- unTriangle = lesTriangles[i];
- image = unTriangle.tracer(image, white);
- }
-
- return image;
- }*/
 
 int main(int argc, char** argv) {
 	TGAImage image(COTE, COTE, TGAImage::RGB);
-//	image.set(52, 41, red);
 
-//	Line ligneTest(52, 41, 70, 35);
-//	image = ligneTest.tracer(image, red);
-//
-//	Line ligneTest2(52, 41, 35, 70);
-//	image = ligneTest2.tracer(image, white);
+	vector3i point1 = {10, 10, 1};
+	vector3i point2 = {100, 30, 1};
+	vector3i point3 = {190, 160, 1};
+	remplir_triangle(point1, point2, point3, image, white);
 
-	image = openfile("african_head.obj", image);
+	//openfile("african_head.obj", image);
 
 	image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
 	image.write_tga_file("output.tga");
