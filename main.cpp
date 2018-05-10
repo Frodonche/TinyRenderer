@@ -4,6 +4,7 @@
 #include <string>
 #include <regex>
 #include <vector>
+#include <cmath>
 
 #include "tgaimage.h"
 
@@ -29,6 +30,12 @@ struct vector3fs {
 	float z;
 };
 
+typedef struct vector3ds vector3d;
+struct vector3ds {
+	long double x;
+	long double y;
+	long double z;
+};
 
 void line(int x1, int y1, int x2, int y2, TGAImage &image, TGAColor color){
 	bool steep = false;
@@ -92,10 +99,10 @@ void remplir_triangle(vector3i point1, vector3i point2, vector3i point3, TGAImag
 		swap(triangle[1], triangle[2]);
 
 	// On initialise les bords de la boite
-	 vector3i bordMax = {(int)COTE-1, (int)COTE-1, 0};
+	 vector3i bordMax = {(int)COTE-1, (int)COTE-1, 1};
 	 vector3i bordMin = {0, 0, 0};
 
-	 vector3i constMax = {(int)COTE-1, (int)COTE-1, 0};
+	 vector3i constMax = {(int)COTE-1, (int)COTE-1, 1};
 	 vector3i constMin = {0, 0, 0};
 
 	for (int i=0; i<3; i++) {
@@ -116,9 +123,17 @@ void remplir_triangle(vector3i point1, vector3i point2, vector3i point3, TGAImag
 
 }
 
+void normalize(vector3d &n){
+	long double value = sqrt((n.x * n.x) + (n.y * n.y) + (n.z * n.z));
+	n.x = n.x / value;
+	n.y = n.y / value;
+	n.z = n.z / value;
+}
+
 // Ouvre le fichier et range la liste des points
 void openfile(string filename, TGAImage &image) {
-	vector<vector3i> lesPoints;
+	vector<vector3i> lesPointsAff;
+	vector<vector3f> lesPointsReels;
 
 	const char * name = filename.c_str();
 
@@ -138,13 +153,20 @@ void openfile(string filename, TGAImage &image) {
 	bool matchV, matchF;
 
 	int cpt;
-	int xTemp, yTemp, zTemp;
+	int xTempA, yTempA, zTempA;
+	float xTempR, yTempR, zTempR;
 	int indice1, indice2, indice3;
 
 	string token, token2;
 	size_t pos, pos2;
 
-	vector3i tempPoint;
+	vector3f lesTemps[3];
+	vector3f tempPointReel, tempNormale1, tempNormale2;
+	vector3i tempPointAff;
+	vector3d normale;
+
+	vector3f directionLumiere = {0, 0, -1};
+	float luminosite;
 
 	while (getline(in, str)) {
 		// A chaque ligne, on regarde de quel type il s'agit, et on les range dans les tableaux appropries
@@ -162,32 +184,40 @@ void openfile(string filename, TGAImage &image) {
 				// si on est sur le x
 				if (cpt == 1) {
 					//cout << token.c_str();
-					xTemp = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
+					xTempA = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
+					xTempR = atof(token.c_str());
 				}
 
 				// si on est sur le y
 				if (cpt == 2) {
-					yTemp = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
+					yTempA = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
+					yTempR = atof(token.c_str());
 					//	cout << " " << token.c_str() << endl;
 				}
 
-				// si on est sur le z
-				if (cpt == 3) {
-					zTemp = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
-					//	cout << " " << token.c_str() << endl;
-				}
+
+
 				str.erase(0, pos + delimiter.length());
 				cpt += 1;
 			}
+			// si on est sur le z
+			pos = str.find(delimiter);
+			token = str.substr(0, pos);
+			zTempA = (int)((atof(token.c_str()) + 1.) * COTE / 2.);
+			zTempR = atof(token.c_str());
 
-			//cout << xTemp << " " << yTemp << endl;
+			tempPointReel.x = xTempR;
+			tempPointReel.y = yTempR;
+			tempPointReel.z = zTempR;
 
-			tempPoint.premier = xTemp;
-			tempPoint.deuxieme = yTemp;
-			tempPoint.troisieme = zTemp;
+			tempPointAff.premier = xTempA;
+			tempPointAff.deuxieme = yTempA;
+			tempPointAff.troisieme = zTempA;
 
-			lesPoints.push_back(tempPoint);
-			image.set(tempPoint.premier, tempPoint.deuxieme, white);
+			lesPointsAff.push_back(tempPointAff);
+			lesPointsReels.push_back(tempPointReel);
+
+			image.set(tempPointAff.premier, tempPointAff.deuxieme, white);
 
 		}
 
@@ -225,7 +255,28 @@ void openfile(string filename, TGAImage &image) {
 			token2 = str.substr(0, pos2);
 			indice3 = atoi(str.c_str()) - 1;
 
-			tracer_triangle(lesPoints.at(indice1), lesPoints.at(indice2), lesPoints.at(indice3), image, white);
+
+			lesTemps[0] = lesPointsReels.at(indice1);
+			lesTemps[1] = lesPointsReels.at(indice2);
+			lesTemps[2] = lesPointsReels.at(indice3);
+
+			tempNormale1 = {lesTemps[2].x - lesTemps[0].x, lesTemps[2].y - lesTemps[0].y, lesTemps[2].z -lesTemps[0].z};
+			tempNormale2 = {lesTemps[1].x - lesTemps[0].x, lesTemps[1].y - lesTemps[0].y, lesTemps[1].z - lesTemps[0].z};
+
+			// On calcul le vecteur avant de le normaliser
+			normale = {(tempNormale1.y * tempNormale2.z) - (tempNormale1.z * tempNormale2.y),
+								(tempNormale1.z * tempNormale2.x) - (tempNormale1.x * tempNormale2.z),
+								(tempNormale1.x * tempNormale2.y) - (tempNormale1.y * tempNormale2.x)};
+
+			normalize(normale);
+
+			luminosite = (normale.x * directionLumiere.x) + (normale.y * directionLumiere.y) + (normale.z * directionLumiere.z);
+
+			if (luminosite > 0) {
+				remplir_triangle(lesPointsAff.at(indice1), lesPointsAff.at(indice2), lesPointsAff.at(indice3), image, TGAColor(luminosite*255, luminosite*255, luminosite*255, 255));
+			}
+
+			//tracer_triangle(lesPoints.at(indice1), lesPoints.at(indice2), lesPoints.at(indice3), image, white);
 
 		}
 	}
@@ -235,12 +286,12 @@ void openfile(string filename, TGAImage &image) {
 int main(int argc, char** argv) {
 	TGAImage image(COTE, COTE, TGAImage::RGB);
 
-	vector3i point1 = {10, 10, 1};
-	vector3i point2 = {100, 30, 1};
-	vector3i point3 = {190, 160, 1};
-	remplir_triangle(point1, point2, point3, image, white);
+//	vector3i point1 = {10, 10, 1};
+//	vector3i point2 = {100, 30, 1};
+//	vector3i point3 = {190, 160, 1};
+//	remplir_triangle(point1, point2, point3, image, white);
 
-	//openfile("african_head.obj", image);
+	openfile("african_head.obj", image);
 
 	image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
 	image.write_tga_file("output.tga");
