@@ -8,13 +8,16 @@
 
 #include "tgaimage.h"
 
+using namespace std;
+
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
 const TGAColor green = TGAColor(0, 255, 0, 255);
 
 const float COTE = 500.0;
 
-using namespace std;
+const float PLUS_INFINI = numeric_limits<float>::max();
+const float MOINS_INFINI = - numeric_limits<float>::max(); // on ne prend pas ::min() pour s'assurer qu'on a la meme valeur que PLUS_INFINI mais en negatif
 
 typedef struct vector3is vector3i;
 struct vector3is {
@@ -68,16 +71,16 @@ void tracer_triangle(vector3i point1, vector3i point2, vector3i point3, TGAImage
 
 
 //Calcul du barycentre pour definir si le point pTest est dans le triangle defini par les points point1, 2 et 3
-vector3f barycentre(vector3i * triangle, vector3i P) {
+vector3f barycentre(vector3i * triangle, vector3f P) {
 	vector3f result;
-	vector3f v1 = {(float)triangle[2].premier - (float)triangle[0].premier, (float)triangle[1].premier - (float)triangle[0].premier, (float)triangle[0].premier - (float)P.premier};
-	vector3f v2 = {(float)triangle[2].deuxieme - (float)triangle[0].deuxieme, (float)triangle[1].deuxieme - (float)triangle[0].deuxieme, (float)triangle[0].deuxieme - (float)P.deuxieme};
+	vector3f v1 = {(float)triangle[2].premier - (float)triangle[0].premier, (float)triangle[1].premier - (float)triangle[0].premier, (float)triangle[0].premier - P.x};
+	vector3f v2 = {(float)triangle[2].deuxieme - (float)triangle[0].deuxieme, (float)triangle[1].deuxieme - (float)triangle[0].deuxieme, (float)triangle[0].deuxieme - P.y};
 
 	// cross product de v1 et v2
 	vector3f crossProduct = {(v1.y * v2.z) - (v1.z * v2.y), (v1.z * v2.x) - (v1.x * v2.z), (v1.x * v2.y) - (v1.y * v2.x)};
 
 	// si on est hors du triangle, on rend une valeur négative
-    if (abs(crossProduct.z)<1){
+    if (abs(crossProduct.z) < 1){
     	result = {-1,-1,-1};
     }else{
     	result = {1.f - (crossProduct.x + crossProduct.y) / crossProduct.z, crossProduct.y / crossProduct.z, crossProduct.x / crossProduct.z};
@@ -87,7 +90,7 @@ vector3f barycentre(vector3i * triangle, vector3i P) {
 }
 
 // Remplit l'intérieur du triangle
-void remplir_triangle(vector3i point1, vector3i point2, vector3i point3, TGAImage &image, TGAColor color){
+void remplir_triangle(float * zbuffer, vector3i point1, vector3i point2, vector3i point3, TGAImage &image, TGAColor color){
 	vector3i triangle[3] = {point1, point2, point3};
 
 	// On trie les points par ordre croissant des y (petit tri a bulles)
@@ -99,25 +102,31 @@ void remplir_triangle(vector3i point1, vector3i point2, vector3i point3, TGAImag
 		swap(triangle[1], triangle[2]);
 
 	// On initialise les bords de la boite
-	 vector3i bordMax = {(int)COTE-1, (int)COTE-1, 1};
-	 vector3i bordMin = {0, 0, 0};
+	 vector3i bordMax = {(int)PLUS_INFINI, (int)PLUS_INFINI, 1};
+	 vector3i bordMin = {(int)MOINS_INFINI, (int)MOINS_INFINI, 1};
 
 	 vector3i constMax = {(int)COTE-1, (int)COTE-1, 1};
 	 vector3i constMin = {0, 0, 0};
 
-	for (int i=0; i<3; i++) {
+	for (int i = 0; i < 3; i++) {
 		bordMax.premier = max((int)constMin.premier, min((int)bordMax.premier, (int)triangle[i].premier));
 		bordMin.premier = min((int)constMax.premier, max((int)bordMin.premier, (int)triangle[i].premier));
 		bordMax.deuxieme = max((int)constMin.deuxieme, min((int)bordMax.deuxieme, (int)triangle[i].deuxieme));
 		bordMin.deuxieme = min((int)constMax.deuxieme, max((int)bordMin.deuxieme, (int)triangle[i].deuxieme));
 	}
 
-	vector3i P;
-	for (P.premier = bordMax.premier; P.premier <= bordMin.premier; P.premier++) {
-		for (P.deuxieme = bordMax.deuxieme; P.deuxieme <= bordMin.deuxieme; P.deuxieme++) {
+	vector3f P;
+	for (P.x = bordMax.premier; P.x <= bordMin.premier; P.x += 1) {
+		for (P.y = bordMax.deuxieme; P.y <= bordMin.deuxieme; P.y += 1) {
 			vector3f bary  = barycentre(triangle, P);
 			if (bary.x < 0 || bary.y < 0 || bary.z < 0) continue; // On prevoie les cas ou les coordonnes sortiraient de l'ecran
-			image.set(P.premier, P.deuxieme, color);
+
+			P.z = (triangle[0].troisieme * bary.x) + (triangle[1].troisieme * bary.y) + (triangle[2].troisieme * bary.z);
+			//cout << P.x << " " << P.y << " " << P.z << endl;
+			if (zbuffer[(int)(P.x + P.y * COTE)] < P.z) {
+				zbuffer[int(P.x + P.y * COTE)] = P.z;
+				image.set(P.x, P.y, color);
+			}
 		}
 	}
 
@@ -168,6 +177,9 @@ void openfile(string filename, TGAImage &image) {
 	vector3f directionLumiere = {0, 0, -1};
 	float luminosite;
 
+	 // On initialise le zbuffer à -Infini
+	float zbuffer[(int)(COTE) * (int)(COTE)] = {MOINS_INFINI};
+
 	while (getline(in, str)) {
 		// A chaque ligne, on regarde de quel type il s'agit, et on les range dans les tableaux appropries
 		matchV = regex_search(str, patternV);
@@ -195,8 +207,6 @@ void openfile(string filename, TGAImage &image) {
 					//	cout << " " << token.c_str() << endl;
 				}
 
-
-
 				str.erase(0, pos + delimiter.length());
 				cpt += 1;
 			}
@@ -217,7 +227,7 @@ void openfile(string filename, TGAImage &image) {
 			lesPointsAff.push_back(tempPointAff);
 			lesPointsReels.push_back(tempPointReel);
 
-			image.set(tempPointAff.premier, tempPointAff.deuxieme, white);
+//			image.set(tempPointAff.premier, tempPointAff.deuxieme, white);
 
 		}
 
@@ -273,7 +283,7 @@ void openfile(string filename, TGAImage &image) {
 			luminosite = (normale.x * directionLumiere.x) + (normale.y * directionLumiere.y) + (normale.z * directionLumiere.z);
 
 			if (luminosite > 0) {
-				remplir_triangle(lesPointsAff.at(indice1), lesPointsAff.at(indice2), lesPointsAff.at(indice3), image, TGAColor(luminosite*255, luminosite*255, luminosite*255, 255));
+				remplir_triangle(zbuffer, lesPointsAff.at(indice1), lesPointsAff.at(indice2), lesPointsAff.at(indice3), image, TGAColor(luminosite*255, luminosite*255, luminosite*255, 255));
 			}
 
 			//tracer_triangle(lesPoints.at(indice1), lesPoints.at(indice2), lesPoints.at(indice3), image, white);
