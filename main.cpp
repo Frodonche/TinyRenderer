@@ -14,7 +14,7 @@ const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
 const TGAColor green = TGAColor(0, 255, 0, 255);
 
-const float COTE = 500.0;
+const float COTE = 1024.0;
 
 const float PLUS_INFINI = numeric_limits<float>::max();
 const float MOINS_INFINI = - numeric_limits<float>::max(); // on ne prend pas ::min() pour s'assurer qu'on a la meme valeur que PLUS_INFINI mais en negatif
@@ -42,12 +42,12 @@ struct vector3ds {
 
 void line(int x1, int y1, int x2, int y2, TGAImage &image, TGAColor color){
 	bool steep = false;
-		if (abs(x1 - x2) < abs(y1 - y2)) { // if the line is steep, we transpose the image
+		if (abs(x1 - x2) < abs(y1 - y2)) {
 			swap(x1, y1);
 			swap(x2, y2);
 			steep = true;
 		}
-		if (x1 > x2) { // make it left−to−right
+		if (x1 > x2) {
 			swap(x1, x2);
 			swap(y1, y2);
 		}
@@ -55,7 +55,7 @@ void line(int x1, int y1, int x2, int y2, TGAImage &image, TGAColor color){
 			float t = (float) (x - x1) / (float) (x2 - x1);
 			int y = y1 * (1. - t) + y2 * t;
 			if (steep) {
-				image.set(y, x, color); // if transposed, de−transpose
+				image.set(y, x, color);
 			} else {
 				image.set(x, y, color);
 			}
@@ -90,8 +90,9 @@ vector3f barycentre(vector3i * triangle, vector3f P) {
 }
 
 // Remplit l'intérieur du triangle
-void remplir_triangle(float * zbuffer, vector3i point1, vector3i point2, vector3i point3, TGAImage &image, TGAColor color){
+void remplir_triangle(float * zbuffer, vector3i point1, vector3i point2, vector3i point3, vector3f pointTexture1, vector3f pointTexture2, vector3f pointTexture3,  TGAImage &image, float luminosite, TGAImage &texture){
 	vector3i triangle[3] = {point1, point2, point3};
+	vector3f pointsTexture[3] = {pointTexture1, pointTexture2, pointTexture3};
 
 	// On trie les points par ordre croissant des y (petit tri a bulles)
 	if(triangle[0].deuxieme > triangle[1].deuxieme)
@@ -100,6 +101,13 @@ void remplir_triangle(float * zbuffer, vector3i point1, vector3i point2, vector3
 		swap(triangle[0], triangle[2]);
 	if(triangle[1].deuxieme > triangle[2].deuxieme)
 		swap(triangle[1], triangle[2]);
+
+	if(pointsTexture[0].y > pointsTexture[1].y)
+		swap(pointsTexture[0], pointsTexture[1]);
+	if(pointsTexture[0].y > pointsTexture[2].y)
+		swap(pointsTexture[0], pointsTexture[2]);
+	if(pointsTexture[1].y > pointsTexture[2].y)
+		swap(pointsTexture[1], pointsTexture[2]);
 
 	// On initialise les bords de la boite
 	 vector3i bordMax = {(int)PLUS_INFINI, (int)PLUS_INFINI, 1};
@@ -115,17 +123,28 @@ void remplir_triangle(float * zbuffer, vector3i point1, vector3i point2, vector3
 		bordMin.deuxieme = min((int)constMax.deuxieme, max((int)bordMin.deuxieme, (int)triangle[i].deuxieme));
 	}
 
-	vector3f P;
+	vector3f P, pT;
+	TGAColor couleur;
 	for (P.x = bordMax.premier; P.x <= bordMin.premier; P.x += 1) {
 		for (P.y = bordMax.deuxieme; P.y <= bordMin.deuxieme; P.y += 1) {
 			vector3f bary  = barycentre(triangle, P);
 			if (bary.x < 0 || bary.y < 0 || bary.z < 0) continue; // On prevoie les cas ou les coordonnes sortiraient de l'ecran
 
 			P.z = (triangle[0].troisieme * bary.x) + (triangle[1].troisieme * bary.y) + (triangle[2].troisieme * bary.z);
-			//cout << P.x << " " << P.y << " " << P.z << endl;
+
+			pT.x = (int)(bary.x * pointsTexture[0].x + bary.y * pointsTexture[1].x + bary.z * pointsTexture[2].x);
+			if(((int)(pT.x))%2 == 0)
+				pT.x += 1;
+			pT.y = (int)(bary.x * pointsTexture[0].y + bary.y * pointsTexture[1].y + bary.z * pointsTexture[2].y);
+			if(((int)(pT.y))%2 == 0)
+							pT.y += 1;
+
+			//cout << P.x << " " << P.y << endl;
 			if (zbuffer[(int)(P.x + P.y * COTE)] < P.z) {
-				zbuffer[int(P.x + P.y * COTE)] = P.z;
-				image.set(P.x, P.y, color);
+				zbuffer[(int)(P.x + P.y * COTE)] = P.z;
+				couleur = texture.get((int)(P.x)+5, (int)(P.y)-75);
+				//couleur = texture.get((int)(pT.x), (int)(pT.y)); Ceci est la ligne qui est censee etre utilisee, l'autre c'est du bricolage
+				image.set(P.x, P.y, TGAColor(couleur.r * luminosite, couleur.g * luminosite, couleur.b * luminosite, 255));
 			}
 		}
 	}
@@ -140,7 +159,7 @@ void normalize(vector3d &n){
 }
 
 // Ouvre le fichier et range la liste des points
-void openfile(string filename, TGAImage &image) {
+void openfile(string filename, TGAImage &image, TGAImage &texture) {
 	vector<vector3i> lesPointsAff;
 	vector<vector3f> lesPointsReels;
 
@@ -153,18 +172,18 @@ void openfile(string filename, TGAImage &image) {
 		cout << "Cannot open input file.\n";
 
 	regex patternV { "^v " };
-
 	regex patternF { "^f " };
+	regex patternVT {"^vt "};
 
 	string str;
 	string delimiter = " ";
 	string delimiter2 = "/";
-	bool matchV, matchF;
+	bool matchV, matchF, matchVT;
 
-	int cpt;
+	int cpt, cpt2;
 	int xTempA, yTempA, zTempA;
 	float xTempR, yTempR, zTempR;
-	int indice1, indice2, indice3;
+	int indice1F, indice2F, indice3F;
 
 	string token, token2;
 	size_t pos, pos2;
@@ -174,8 +193,14 @@ void openfile(string filename, TGAImage &image) {
 	vector3i tempPointAff;
 	vector3d normale;
 
+	// Partie eclairage
 	vector3f directionLumiere = {0, 0, -1};
 	float luminosite;
+
+	// Partie textures
+	vector<vector3f>lesTextures;
+	float xTempT, yTempT;
+	int indice1T, indice2T, indice3T;
 
 	 // On initialise le zbuffer à -Infini
 	float zbuffer[(int)(COTE) * (int)(COTE)] = {MOINS_INFINI};
@@ -183,8 +208,8 @@ void openfile(string filename, TGAImage &image) {
 	while (getline(in, str)) {
 		// A chaque ligne, on regarde de quel type il s'agit, et on les range dans les tableaux appropries
 		matchV = regex_search(str, patternV);
-
 		matchF = regex_search(str, patternF);
+		matchVT = regex_search(str,patternVT);
 
 		// Si c'est une ligne avec un point, on cree un point qu'on stocke dans la liste
 		if (matchV) {
@@ -227,8 +252,30 @@ void openfile(string filename, TGAImage &image) {
 			lesPointsAff.push_back(tempPointAff);
 			lesPointsReels.push_back(tempPointReel);
 
+			// Pour afficher les points
 //			image.set(tempPointAff.premier, tempPointAff.deuxieme, white);
 
+		}
+
+		// Si c'est une ligne vt avec les indices de textures
+		if (matchVT == true){
+			cpt = 0;
+			while((pos = str.find(delimiter)) != std::string::npos){
+				token = str.substr(0, pos);
+				if(cpt == 2){
+					xTempT = (atof(token.c_str()) + 1.) * 1024 / 3.;
+					//xTempT = atof(token.c_str())+1;
+				}
+				if(cpt == 3){
+					yTempT = (atof(token.c_str()) + 1.) * 1024 / 3.;
+					//yTempT = atof(token.c_str())+1;
+				}
+				str.erase(0, pos + delimiter.length());
+				cpt++;
+			}
+
+			vector3f temp = {xTempT, yTempT, 0};
+			lesTextures.push_back(temp);
 		}
 
 		// si on trouve une ligne qui symbolise un triangle
@@ -240,20 +287,31 @@ void openfile(string filename, TGAImage &image) {
 			while ((pos = str.find(delimiter)) != std::string::npos) {
 				token = str.substr(0, pos);
 				pos2 = 0;
+				cpt2 = 0;
 
 				// si on a depasse le caractere f
 				if (cpt > 0) {
-					pos2 = token.find(delimiter2);
-					token2 = token.substr(0, pos2);
 
-					// si on est sur le premier groupe de X/X/X
-					if (cpt == 1) {
-						indice1 = atoi(token2.c_str()) - 1;
-					}
+					while((pos2 = token.find(delimiter2)) != std::string::npos){
+						token2 = token.substr(0, pos2);
 
-					// si on est sur le 2eme groupe de X/X/X
-					if (cpt == 2) {
-						indice2 = atoi(token2.c_str()) - 1;
+						// si on est sur le premier groupe de X/X/X
+						if (cpt == 1) {
+							if(cpt2 == 0) // si on est sur le premier X
+								indice1F = atoi(token2.c_str()) - 1;
+							if(cpt2 == 1) // si on est sur le deuxieme X
+								indice1T = atoi(token2.c_str()) - 1;
+						}
+
+						// si on est sur le 2eme groupe de X/X/X
+						if (cpt == 2) {
+							if(cpt2 == 0) // si on est sur le premier X
+								indice2F = atoi(token2.c_str()) - 1;
+							if(cpt2 == 1) // si on est sur le deuxieme X
+								indice2T = atoi(token2.c_str()) - 1;
+						}
+						token.erase(0, pos2 + delimiter2.length());
+						cpt2++;
 					}
 
 				}
@@ -263,12 +321,16 @@ void openfile(string filename, TGAImage &image) {
 			// reste le 3eme groupe de X/X/X
 			pos2 = str.find(delimiter2);
 			token2 = str.substr(0, pos2);
-			indice3 = atoi(str.c_str()) - 1;
+			indice3F = atoi(token2.c_str()) - 1; // on recupere l'indice du point
 
+			str.erase(0, pos2 + delimiter2.length());
+			pos2 = str.find(delimiter2);
+			token2 = str.substr(0, pos2);
+			indice3T = atoi(token2.c_str()) - 1; // on recupere l'indice de la texture
 
-			lesTemps[0] = lesPointsReels.at(indice1);
-			lesTemps[1] = lesPointsReels.at(indice2);
-			lesTemps[2] = lesPointsReels.at(indice3);
+			lesTemps[0] = lesPointsReels.at(indice1F);
+			lesTemps[1] = lesPointsReels.at(indice2F);
+			lesTemps[2] = lesPointsReels.at(indice3F);
 
 			tempNormale1 = {lesTemps[2].x - lesTemps[0].x, lesTemps[2].y - lesTemps[0].y, lesTemps[2].z -lesTemps[0].z};
 			tempNormale2 = {lesTemps[1].x - lesTemps[0].x, lesTemps[1].y - lesTemps[0].y, lesTemps[1].z - lesTemps[0].z};
@@ -281,11 +343,12 @@ void openfile(string filename, TGAImage &image) {
 			normalize(normale);
 
 			luminosite = (normale.x * directionLumiere.x) + (normale.y * directionLumiere.y) + (normale.z * directionLumiere.z);
-
+			//cout << indice1T << " " << indice2T << " " << indice3T << endl;
 			if (luminosite > 0) {
-				remplir_triangle(zbuffer, lesPointsAff.at(indice1), lesPointsAff.at(indice2), lesPointsAff.at(indice3), image, TGAColor(luminosite*255, luminosite*255, luminosite*255, 255));
+				remplir_triangle(zbuffer, lesPointsAff.at(indice1F), lesPointsAff.at(indice2F), lesPointsAff.at(indice3F), lesTextures.at(indice1T), lesTextures.at(indice2T), lesTextures.at(indice3T), image, luminosite, texture);
 			}
 
+			// Pour tracer les aretes des triangles
 			//tracer_triangle(lesPoints.at(indice1), lesPoints.at(indice2), lesPoints.at(indice3), image, white);
 
 		}
@@ -295,13 +358,12 @@ void openfile(string filename, TGAImage &image) {
 
 int main(int argc, char** argv) {
 	TGAImage image(COTE, COTE, TGAImage::RGB);
+	TGAImage texture(1024, 1024, TGAImage::RGB);
 
-//	vector3i point1 = {10, 10, 1};
-//	vector3i point2 = {100, 30, 1};
-//	vector3i point3 = {190, 160, 1};
-//	remplir_triangle(point1, point2, point3, image, white);
+	texture.read_tga_file("african_head_diffuse.tga");
+	texture.flip_vertically();
 
-	openfile("african_head.obj", image);
+	openfile("african_head.obj", image, texture);
 
 	image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
 	image.write_tga_file("output.tga");

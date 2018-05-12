@@ -1,0 +1,24 @@
+Guillaume ROTH - Description du programme
+
+Le programme se compile avec make et se lance avec ./main
+Les leçons 1, 2 et 3 ont été traitée.
+
+Etant donné que pour des raisons que j'ignore, la texture s'affichait 2 fois trop grande sur le modèle, le visuel affiché dans output.tga est le résultat d'une légère modification au niveau des lignes 144/145 de main.cpp.
+
+Le programme fonctionne de la façon suivante : 
+
+- main() déclare l'image de sortie ainsi que l'image de texture, avant de d'écrire dans le fichier de sortie "output.tga" après avoir traité l'image de sortie.
+
+- openfile() s'occupe d'ouvrir le fichier "african_head.obj", de stocker les informations qui nous intéressent (comme les points, les indices concernant les coordonnées des points et des points de texture), avant d'appeler au fur et à mesure la fonction d'affichage des triangles
+
+- normalize() s'occupe de normalizer le vecteur passé en paramètres
+
+- remplir_triangle() s'occupe de remplir le triangle avec la texture et à l'aide des points passés en paramètres, en tenant compte du z-buffering et de la luminosité.
+
+- barycentre() est utilisé pour définir la valeur de barycentre d'un point par rapport à un triangle, autrement dit pour définir par la suite l'appartenance du point en question dans le dit triangle.
+
+- tracer_triangle() était utilisée dans la première leçon du TP pour simplement tracer les arêtes des triangles du modèle.
+
+- line() est la fonction utilisée dans les premières leçons pour tracer les triangles
+
+- les types vector3f, vector3d et vector3i sont des vecteurs tridimensionnels pouvant respectivement stocker des float, double et integer.
